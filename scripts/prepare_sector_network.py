@@ -27,6 +27,47 @@ from types import SimpleNamespace
 spatial = SimpleNamespace()
 
 
+def calculate_offwind_cost(WD, MW=12, no=54, D=236, HH=138, SP=343, DT=8):
+    """
+    Calculating offshore wind capex considering the average water depth of the region.
+    Equations and default values from DEA technology data (https://ens.dk/sites/ens.dk/files/Statistik/technology_catalogue_offshore_wind_march_2022_-_annex_to_prediction_of_performance_and_cost.pdf).
+
+    Parameters
+    ----------
+    WD : xarray
+        Average water depth of the different regions
+    MW : float
+        Power of the wind turbine in MW
+    no: int
+        Average number of wind turbines in farm
+    D: int
+        Rotor diameter of wind turbine in meters
+    HH: int
+        Hub height of wind turbine in meters
+    SP: int
+        Specific power of wind turbine in W/m2
+    DT: int
+        Distance between the wind turbine in number of rotor diameters
+
+    Returns
+    -------
+    capex: xarray
+        Capex of the wind turbine in the different regions
+    """
+    RA=(D/2)**2*np.pi
+    IA=DT*D
+    wind_turbine_invest=(-0.6*SP+750+(0.53*HH*RA+5500)/(1000*MW))*1.1
+    wind_turbine_install= 300*MW**(-0.6)
+    foundation_invest=(8*np.abs(WD)+30)*(1+(0.003*(350-np.min([400,SP]))))
+    foundation_install=2.5*np.abs(WD)+600*MW**(-0.6)
+    array_cable=IA*500/MW/1000 
+    turbine_transport=50
+    insurance=100
+    finance_cost=100
+    continences=50
+    capex=np.sum([wind_turbine_invest,wind_turbine_install, foundation_invest, foundation_install, array_cable, turbine_transport, insurance, finance_cost, continences])*1000 # in €/MW
+    return capex
+
 def define_spatial(nodes, options):
     """
     Namespace for spatial
@@ -331,8 +372,12 @@ def update_wind_solar_costs(n, costs):
     #map initial network -> clustered network
     clustermaps = busmap_s.map(busmap)
 
+    import yaml
+    with open(snakemake.input["pypsaeur_config"]) as f:
+        renewable_config = yaml.safe_load(f)["renewable"]
+
     #code adapted from pypsa-eur/scripts/add_electricity.py
-    for connection in ['dc', 'ac']:
+    for connection in ['dc', 'ac', 'float']:
         tech = "offwind-" + connection
         profile = snakemake.input['profile_offwind_' + connection]
         with xr.open_dataset(profile) as ds:
@@ -357,7 +402,19 @@ def update_wind_solar_costs(n, costs):
 
             connection_cost = (connection_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
 
-            capital_cost = (costs.at['offwind', 'fixed'] +
+            
+            calculate_topology_cost=renewable_config[tech].get("calculate_topology_cost", False)
+            if calculate_topology_cost and tech != "offwind-float":
+                import atlite
+                turbine_type = renewable_config[tech]["resource"]["turbine"]
+                turbine_config = atlite.resource.get_windturbineconfig(turbine_type)
+                kwargs={"WD":ds["water_depth"].to_pandas(), "MW":turbine_config["P"], "HH":turbine_config["hub_height"]}
+                turbine_cost = calculate_offwind_cost(**kwargs) * (annuity(costs.at[tech, 'lifetime'], costs.at[tech, "discount rate"]) + costs.at[tech, "FOM"] / 100.) * Nyears
+                turbine_cost = (turbine_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
+            else:
+                turbine_cost=costs.at[tech, 'fixed']
+            
+            capital_cost = (turbine_cost +
                             costs.at[tech + '-station', 'fixed'] +
                             connection_cost)
 
@@ -2331,10 +2388,10 @@ if __name__ == "__main__":
             'prepare_sector_network',
             simpl='',
             opts="",
-            clusters="37",
-            lv=1.5,
-            sector_opts='Co2L0-168H-T-H-B-I-solar3-dist1',
-            planning_horizons="2020",
+            clusters="10",
+            lv=1.0,
+            sector_opts='Co2L0-3H-T-H-B-I-A-solar+p3-dist1',
+            planning_horizons="2030",
         )
 
     logging.basicConfig(level=snakemake.config['logging_level'])
