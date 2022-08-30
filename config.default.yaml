@@ -86,6 +86,7 @@ pypsa_eur:
     - onwind
     - offwind-ac
     - offwind-dc
+    - offwind-float
     - solar
     - ror
   StorageUnit:
@@ -449,6 +450,7 @@ plotting:
     offshore wind (AC): "#6895dd"
     offwind-dc: "#74c6f2"
     offshore wind (DC): "#74c6f2"
+    offwind-float : "#6895dd"
     # water
     hydro: '#298c81'
     hydro reservoir: '#298c81'

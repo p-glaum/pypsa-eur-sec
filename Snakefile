@@ -462,6 +462,7 @@ rule build_transport_demand:
 rule prepare_sector_network:
     input:
         overrides="data/override_component_attrs",
+        pypsaeur_config= SDIR + '/configs/config.pypsaeur.yaml',
         network=pypsaeur('networks/elec_s{simpl}_{clusters}_ec_lv{lv}_{opts}.nc'),
         energy_totals_name='resources/energy_totals.csv',
         pop_weighted_energy_totals="resources/pop_weighted_energy_totals_s{simpl}_{clusters}.csv",
@@ -475,6 +476,7 @@ rule prepare_sector_network:
         costs=CDIR + "costs_{planning_horizons}.csv",
         profile_offwind_ac=pypsaeur("resources/profile_offwind-ac.nc"),
         profile_offwind_dc=pypsaeur("resources/profile_offwind-dc.nc"),
+        profile_offwind_float=pypsaeur("resources/profile_offwind-float.nc"),
         h2_cavern="resources/salt_cavern_potentials_s{simpl}_{clusters}.csv",
         busmap_s=pypsaeur("resources/busmap_elec_s{simpl}.csv"),
         busmap=pypsaeur("resources/busmap_elec_s{simpl}_{clusters}.csv"),
