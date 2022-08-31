@@ -376,9 +376,6 @@ def update_wind_solar_costs(n, costs):
     #map initial network -> clustered network
     clustermaps = busmap_s.map(busmap)
 
-    import yaml
-    with open(snakemake.input["pypsaeur_config"]) as f:
-        renewable_config = yaml.safe_load(f)["renewable"]
 
     #code adapted from pypsa-eur/scripts/add_electricity.py
     for connection in ['dc', 'ac', 'float']:
@@ -406,11 +403,11 @@ def update_wind_solar_costs(n, costs):
 
             connection_cost = (connection_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
 
-            
-            calculate_topology_cost=renewable_config[tech].get("calculate_topology_cost", False)
+            off_wind=snakemake.config["offshore_wind"]
+            calculate_topology_cost=off_wind[tech].get("calculate_topology_cost", False)
             if calculate_topology_cost and tech != "offwind-float":
                 import atlite
-                turbine_type = renewable_config[tech]["resource"]["turbine"]
+                turbine_type = off_wind[tech]["resource"]["turbine"]
                 turbine_config = atlite.resource.get_windturbineconfig(turbine_type)
                 kwargs={"WD":ds["water_depth"].to_pandas(), "MW":turbine_config["P"], "HH":turbine_config["hub_height"]}
                 turbine_cost = calculate_offwind_cost(**kwargs) * (annuity(costs.at[tech, 'lifetime'], costs.at[tech, "discount rate"]) + costs.at[tech, "FOM"] / 100.) * Nyears

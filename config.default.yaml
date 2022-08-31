@@ -131,6 +131,19 @@ biomass:
       - Manure solid, liquid
       - Sludge
 
+offshore_wind:
+  offwind-ac:
+    resource:
+      turbine: NREL_ReferenceTurbine_2020ATB_12MW_offshore
+    calculate_topology_cost: true
+  offwind-dc:
+    resource:
+      turbine: NREL_ReferenceTurbine_2020ATB_12MW_offshore
+    calculate_topology_cost: true
+  offwind-float:
+    resource:
+      turbine: NREL_ReferenceTurbine_5MW_offshore
+    calculate_topology_cost: false
 
 solar_thermal:
   clearsky_model: simple  # should be "simple" or "enhanced"?

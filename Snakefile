@@ -256,9 +256,9 @@ rule build_biomass_potentials:
         enspreso_biomass=HTTP.remote("https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/ENSPRESO/ENSPRESO_BIOMASS.xlsx", keep_local=True),
         nuts2="data/nuts/NUTS_RG_10M_2013_4326_LEVL_2.geojson", # https://gisco-services.ec.europa.eu/distribution/v2/nuts/download/#nuts21
         regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
-        nuts3_population="../pypsa-eur/data/bundle/nama_10r_3popgdp.tsv.gz",
-        swiss_cantons="../pypsa-eur/data/bundle/ch_cantons.csv",
-        swiss_population="../pypsa-eur/data/bundle/je-e-21.03.02.xls",
+        nuts3_population=pypsaeur("data/bundle/nama_10r_3popgdp.tsv.gz"),
+        swiss_cantons=pypsaeur("data/bundle/ch_cantons.csv"),
+        swiss_population=pypsaeur("data/bundle/je-e-21.03.02.xls"),
         country_shapes=pypsaeur('resources/country_shapes.geojson')
     output:
         biomass_potentials_all='resources/biomass_potentials_all_s{simpl}_{clusters}.csv',
@@ -462,7 +462,6 @@ rule build_transport_demand:
 rule prepare_sector_network:
     input:
         overrides="data/override_component_attrs",
-        pypsaeur_config= SDIR + '/configs/config.pypsaeur.yaml',
         network=pypsaeur('networks/elec_s{simpl}_{clusters}_ec_lv{lv}_{opts}.nc'),
         energy_totals_name='resources/energy_totals.csv',
         eurostat=input_eurostat,
@@ -600,7 +599,9 @@ if config["foresight"] == "overnight":
             python=RDIR + "/logs/elec_s{simpl}_{clusters}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_python.log",
             memory=RDIR + "/logs/elec_s{simpl}_{clusters}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_memory.log"
         threads: config['solving']['solver'].get('threads', 4)
-        resources: mem_mb=config['solving']['mem']
+        resources: 
+            mem_mb=config['solving']['mem'],
+            walltime="20:00:00"
         benchmark: RDIR + "/benchmarks/solve_network/elec_s{simpl}_{clusters}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}"
         script: "scripts/solve_network.py"
 
