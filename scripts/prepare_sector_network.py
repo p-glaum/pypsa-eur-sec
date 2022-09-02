@@ -382,16 +382,17 @@ def update_wind_solar_costs(n, costs):
         tech = "offwind-" + connection
         profile = snakemake.input['profile_offwind_' + connection]
         with xr.open_dataset(profile) as ds:
-            underwater_fraction = ds['underwater_fraction'].to_pandas()
+            index_mapper=ds.bus.to_pandas().str.split("_").str[0]
+            underwater_fraction = ds['underwater_fraction'].to_pandas().rename(index_mapper)
             connection_cost = (snakemake.config['costs']['lines']['length_factor'] *
                                ds['average_distance'].to_pandas() *
                                (underwater_fraction *
                                 costs.at[tech + '-connection-submarine', 'fixed'] +
                                 (1. - underwater_fraction) *
-                                costs.at[tech + '-connection-underground', 'fixed']))
+                                costs.at[tech + '-connection-underground', 'fixed'])).rename(index_mapper)
 
             #convert to aggregated clusters with weighting
-            weight = ds['weight'].to_pandas()
+            weight = ds['weight'].to_pandas().rename(index_mapper)
 
             #e.g. clusters == 37m means that VRE generators are left
             #at clustering of simplified network, but that they are
@@ -409,7 +410,7 @@ def update_wind_solar_costs(n, costs):
                 import atlite
                 turbine_type = off_wind[tech]["resource"]["turbine"]
                 turbine_config = atlite.resource.get_windturbineconfig(turbine_type)
-                kwargs={"WD":ds["water_depth"].to_pandas(), "MW":turbine_config["P"], "HH":turbine_config["hub_height"]}
+                kwargs={"WD":ds["water_depth"].to_pandas().rename(index_mapper), "MW":turbine_config["P"], "HH":turbine_config["hub_height"]}
                 turbine_cost = calculate_offwind_cost(**kwargs) * (annuity(costs.at[tech, 'lifetime'], costs.at[tech, "discount rate"]) + costs.at[tech, "FOM"] / 100.) * Nyears
                 turbine_cost = (turbine_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
             else:
