@@ -27,7 +27,7 @@ from types import SimpleNamespace
 spatial = SimpleNamespace()
 
 
-def calculate_offwind_cost(WD, MW=12, no=54, D=236, HH=138, SP=343, DT=8):
+def calculate_offwind_cost(WD, MW=12, D=236, HH=138, SP=343, DT=8):
     """
     Calculating offshore wind capex considering the average water depth of the region.
     Equations and default values from DEA technology data (https://ens.dk/sites/ens.dk/files/Statistik/technology_catalogue_offshore_wind_march_2022_-_annex_to_prediction_of_performance_and_cost.pdf).
@@ -38,8 +38,6 @@ def calculate_offwind_cost(WD, MW=12, no=54, D=236, HH=138, SP=343, DT=8):
         Average water depth of the different regions
     MW : float
         Power of the wind turbine in MW
-    no: int
-        Average number of wind turbines in farm
     D: int
         Rotor diameter of wind turbine in meters
     HH: int
@@ -65,7 +63,8 @@ def calculate_offwind_cost(WD, MW=12, no=54, D=236, HH=138, SP=343, DT=8):
     insurance=100
     finance_cost=100
     continences=50
-    capex=np.sum([wind_turbine_invest,wind_turbine_install, foundation_invest, foundation_install, array_cable, turbine_transport, insurance, finance_cost, continences])*1000 # in €/MW
+    development_cost=0.02 # in % of capex
+    capex=np.sum([wind_turbine_invest,wind_turbine_install, foundation_invest, foundation_install, array_cable, turbine_transport, insurance, finance_cost, continences])*(1+development_cost)*1000 # in €/MW
     return capex
 
 def define_spatial(nodes, options):
@@ -323,6 +322,8 @@ def create_network_topology(n, prefix, carriers=["DC"], connector=" -> ", bidire
         n.lines[ln_attrs],
         n.links.loc[n.links.carrier.isin(carriers), lk_attrs]
     ]).fillna(0)
+    # currently do not want to consider offshore H2 grid
+    candidates.drop(candidates.filter(like="off", axis=0).index, axis=0, inplace=True)
 
     # base network topology purely on location not carrier
     candidates["bus0"] = candidates.bus0.map(n.buses.location)
@@ -383,24 +384,28 @@ def update_wind_solar_costs(n, costs):
         profile = snakemake.input['profile_offwind_' + connection]
         with xr.open_dataset(profile) as ds:
             index_mapper=ds.bus.to_pandas().str.split("_").str[0]
-            underwater_fraction = ds['underwater_fraction'].to_pandas().rename(index_mapper)
+            underwater_fraction = ds['underwater_fraction'].to_pandas()
             connection_cost = (snakemake.config['costs']['lines']['length_factor'] *
                                ds['average_distance'].to_pandas() *
                                (underwater_fraction *
                                 costs.at[tech + '-connection-submarine', 'fixed'] +
                                 (1. - underwater_fraction) *
-                                costs.at[tech + '-connection-underground', 'fixed'])).rename(index_mapper)
+                                costs.at[tech + '-connection-underground', 'fixed']))
 
+            # do not consider connection cost if generator is connected to offshore bus
+            connection_cost.loc[("off_" +connection_cost.index).isin(n.buses.index)] = 0
             #convert to aggregated clusters with weighting
-            weight = ds['weight'].to_pandas().rename(index_mapper)
+            weight = ds['weight'].to_pandas()
 
             #e.g. clusters == 37m means that VRE generators are left
             #at clustering of simplified network, but that they are
             #connected to 37-node network
-            if snakemake.wildcards.clusters[-1:] == "m":
-                genmap = busmap_s
+            if len(n.generators.loc[n.generators.carrier==tech])==len(ds.bus):
+                genmap=ds.bus.to_pandas()
+            elif snakemake.wildcards.clusters[-1:] == "m":
+                genmap = index_mapper.map(busmap_s)
             else:
-                genmap = clustermaps
+                genmap = index_mapper.map(clustermaps)
 
             connection_cost = (connection_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
 
@@ -410,7 +415,7 @@ def update_wind_solar_costs(n, costs):
                 import atlite
                 turbine_type = off_wind[tech]["resource"]["turbine"]
                 turbine_config = atlite.resource.get_windturbineconfig(turbine_type)
-                kwargs={"WD":ds["water_depth"].to_pandas().rename(index_mapper), "MW":turbine_config["P"], "HH":turbine_config["hub_height"]}
+                kwargs={"WD":ds["water_depth"].to_pandas(), "MW":turbine_config["P"], "HH":turbine_config["hub_height"]}
                 turbine_cost = calculate_offwind_cost(**kwargs) * (annuity(costs.at[tech, 'lifetime'], costs.at[tech, "discount rate"]) + costs.at[tech, "FOM"] / 100.) * Nyears
                 turbine_cost = (turbine_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
             else:
