@@ -428,7 +428,9 @@ def update_wind_solar_costs(n, costs):
             logger.info("Added connection cost of {:0.0f}-{:0.0f} Eur/MW/a to {}"
                         .format(connection_cost[0].min(), connection_cost[0].max(), tech))
 
-            n.generators.loc[n.generators.carrier==tech, 'capital_cost'] = capital_cost.rename(index=lambda node: node + ' ' + tech)
+            idx = n.generators.loc[n.generators.carrier==tech, 'capital_cost'].index
+            idx = dict(zip(capital_cost.index,capital_cost.index.map(lambda x: idx[idx.str.contains(x)][0])))
+            n.generators.loc[n.generators.carrier==tech, 'capital_cost'] = capital_cost.rename(index=idx)
 
 
 def add_carrier_buses(n, carrier, nodes=None):
