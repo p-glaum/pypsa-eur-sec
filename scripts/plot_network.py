@@ -89,6 +89,8 @@ def plot_map(network, components=["links", "stores", "storage_units", "generator
 
     for comp in components:
         df_c = getattr(n, comp)
+        if df_c.empty:
+            continue
         df_c["nice_group"] = df_c.carrier.map(rename_techs_tyndp)
 
         attr = "e_nom_opt" if comp == "stores" else "p_nom_opt"
@@ -708,11 +710,11 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             'plot_network',
             simpl='',
-            clusters="45",
-            lv=1.0,
+            clusters="60",
+            lv="opt",
             opts='',
-            sector_opts='168H-T-H-B-I-A-solar+p3-dist1',
-            planning_horizons="2050",
+            sector_opts='Co2L0-3H-T-H-B-I-A-solar+p3-linemaxext20',
+            planning_horizons="2030",
         )
 
     overrides = override_component_attrs(snakemake.input.overrides)
