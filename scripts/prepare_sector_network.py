@@ -398,7 +398,7 @@ def update_wind_solar_costs(n, costs):
         with xr.open_dataset(profile) as ds:
             index_mapper=ds.bus.to_pandas().str.split("_").str[0]
             underwater_fraction = ds['underwater_fraction'].to_pandas()
-            connection_cost = (snakemake.config['costs']['lines']['length_factor'] *
+            cable_cost = (snakemake.config['costs']['lines']['length_factor'] *
                                ds['average_distance'].to_pandas() *
                                (underwater_fraction *
                                 costs.at[tech + '-connection-submarine', 'fixed'] +
@@ -406,7 +406,7 @@ def update_wind_solar_costs(n, costs):
                                 costs.at[tech + '-connection-underground', 'fixed']))
 
             # do not consider connection cost if generator is connected to offshore bus
-            connection_cost.loc[("off_" +connection_cost.index).isin(n.buses.index)] = 0
+            cable_cost.loc[("off_" +cable_cost.index).isin(n.buses.index)] = 0
             #convert to aggregated clusters with weighting
             weight = ds['weight'].to_pandas()
 
@@ -420,7 +420,8 @@ def update_wind_solar_costs(n, costs):
             else:
                 genmap = index_mapper.map(clustermaps)
 
-            connection_cost = (connection_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
+            cable_cost = (cable_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
+            connection_cost = cable_cost + costs.at[tech + '-station', 'fixed']
 
             off_wind=snakemake.config["offshore_wind"]
             calculate_topology_cost=off_wind[tech].get("calculate_topology_cost", False)
@@ -434,9 +435,7 @@ def update_wind_solar_costs(n, costs):
             else:
                 turbine_cost=costs.at[tech, 'fixed']
             
-            capital_cost = (turbine_cost +
-                            costs.at[tech + '-station', 'fixed'] +
-                            connection_cost)
+            capital_cost = (turbine_cost + connection_cost)
 
             logger.info("Added connection cost of {:0.0f}-{:0.0f} Eur/MW/a to {}"
                         .format(connection_cost[0].min(), connection_cost[0].max(), tech))
@@ -444,6 +443,9 @@ def update_wind_solar_costs(n, costs):
             idx = n.generators.loc[n.generators.carrier==tech, 'capital_cost'].index
             idx = dict(zip(capital_cost.index,capital_cost.index.map(lambda x: idx[idx.str.contains(x)][0])))
             n.generators.loc[n.generators.carrier==tech, 'capital_cost'] = capital_cost.rename(index=idx)
+            n.generators.loc[n.generators.carrier==tech, 'connection_cost'] = connection_cost.rename(index=idx)
+            n.generators.loc[n.generators.carrier==tech, 'turbine_cost'] = turbine_cost if isinstance(turbine_cost, float) else turbine_cost.rename(index=idx)
+
 
 
 def add_carrier_buses(n, carrier, nodes=None):
@@ -2651,10 +2653,11 @@ if __name__ == "__main__":
             'prepare_sector_network',
             simpl='',
             opts="",
-            clusters="37",
-            lv=1.5,
-            sector_opts='cb40ex0-365H-T-H-B-I-A-solar+p3-dist1',
-            planning_horizons="2020",
+            clusters="60",
+            offgrid="all",
+            lv="opt",
+            sector_opts='Co2L0-3H-T-H-B-I-A-solar+p3-linemaxext20',
+            planning_horizons="2030",
         )
 
     logging.basicConfig(level=snakemake.config['logging_level'])
