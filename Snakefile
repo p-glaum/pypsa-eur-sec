@@ -15,7 +15,7 @@ wildcard_constraints:
     lv="[a-z0-9\.]+",
     simpl="[a-zA-Z0-9]*",
     clusters="[0-9]+m?",
-    offgrid="[0-9]+(-[chp])?(-h)?|all",
+    offgrid="\d+-[ch]|\d+-p-h|all|",
     opts="[-+a-zA-Z0-9]*",
     sector_opts="[-+a-zA-Z0-9\.\s]*"
 
