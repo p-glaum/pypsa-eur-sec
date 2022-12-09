@@ -28,7 +28,7 @@ CDIR = config['costs_dir']
 subworkflow pypsaeur:
     workdir: "../pypsa-eur"
     snakefile: "../pypsa-eur/Snakefile"
-    configfile: "../pypsa-eur/config.yaml"
+    configfile: "../configs/config.power.yaml"
 
 rule all:
     input: SDIR + '/graphs/costs.pdf'
