@@ -713,6 +713,7 @@ if __name__ == "__main__":
             'plot_network',
             simpl='',
             clusters="60",
+            offgrid="",
             lv="opt",
             opts='',
             sector_opts='Co2L0-3H-T-H-B-I-A-solar+p3-linemaxext20',
