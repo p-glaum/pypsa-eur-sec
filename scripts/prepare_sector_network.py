@@ -421,7 +421,7 @@ def update_wind_solar_costs(n, costs):
                 genmap = index_mapper.map(clustermaps)
 
             cable_cost = (cable_cost*weight).groupby(genmap).sum()/weight.groupby(genmap).sum()
-            connection_cost = cable_cost + costs.at[tech + '-station', 'fixed']
+            grid_connection_cost = cable_cost + costs.at[tech + '-station', 'fixed']
 
             off_wind=snakemake.config["offshore_wind"]
             calculate_topology_cost=off_wind[tech].get("calculate_topology_cost", False)
@@ -435,7 +435,7 @@ def update_wind_solar_costs(n, costs):
             else:
                 turbine_cost=costs.at[tech, 'fixed']
             
-            capital_cost = (turbine_cost + connection_cost)
+            capital_cost = (turbine_cost + grid_connection_cost)
 
             logger.info("Added connection cost of {:0.0f}-{:0.0f} Eur/MW/a to {}"
                         .format(connection_cost[0].min(), connection_cost[0].max(), tech))
@@ -443,7 +443,7 @@ def update_wind_solar_costs(n, costs):
             idx = n.generators.loc[n.generators.carrier==tech, 'capital_cost'].index
             idx = dict(zip(capital_cost.index,capital_cost.index.map(lambda x: idx[idx.str.contains(x)][0])))
             n.generators.loc[n.generators.carrier==tech, 'capital_cost'] = capital_cost.rename(index=idx)
-            n.generators.loc[n.generators.carrier==tech, 'connection_cost'] = connection_cost.rename(index=idx)
+            n.generators.loc[n.generators.carrier==tech, 'grid_connection_cost'] = grid_connection_cost.rename(index=idx)
             n.generators.loc[n.generators.carrier==tech, 'turbine_cost'] = turbine_cost if isinstance(turbine_cost, float) else turbine_cost.rename(index=idx)
 
 
