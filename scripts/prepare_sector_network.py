@@ -146,6 +146,16 @@ def define_spatial(nodes, options):
 
         spatial.ammonia.df = pd.DataFrame(vars(spatial.ammonia), index=nodes)
 
+    # hydrogen
+    spatial.h2 = SimpleNamespace()
+    spatial.h2.nodes = nodes + " H2"
+    spatial.h2.locations = nodes
+
+    # methanol
+    spatial.methanol = SimpleNamespace()
+    spatial.methanol.nodes = ["EU methanol"]
+    spatial.methanol.locations = ["EU"]
+
     # oil
     spatial.oil = SimpleNamespace()
     spatial.oil.nodes = ["EU oil"]
@@ -438,7 +448,7 @@ def update_wind_solar_costs(n, costs):
             capital_cost = (turbine_cost + grid_connection_cost)
 
             logger.info("Added connection cost of {:0.0f}-{:0.0f} Eur/MW/a to {}"
-                        .format(connection_cost[0].min(), connection_cost[0].max(), tech))
+                        .format(grid_connection_cost[0].min(), grid_connection_cost[0].max(), tech))
 
             idx = n.generators.loc[n.generators.carrier==tech, 'capital_cost'].index
             idx = dict(zip(capital_cost.index,capital_cost.index.map(lambda x: idx[idx.str.contains(x)][0])))
@@ -1516,9 +1526,10 @@ def add_heat(n, costs):
         "ground": xr.open_dataarray(snakemake.input.cop_soil_total).to_pandas().reindex(index=n.snapshots)
     }
 
-    solar_thermal = xr.open_dataarray(snakemake.input.solar_thermal_total).to_pandas().reindex(index=n.snapshots)
-    # 1e3 converts from W/m^2 to MW/(1000m^2) = kW/m^2
-    solar_thermal = options['solar_cf_correction'] * solar_thermal / 1e3
+    if options["solar_thermal"]:
+        solar_thermal = xr.open_dataarray(snakemake.input.solar_thermal_total).to_pandas().reindex(index=n.snapshots)
+        # 1e3 converts from W/m^2 to MW/(1000m^2) = kW/m^2
+        solar_thermal = options['solar_cf_correction'] * solar_thermal / 1e3
 
     for name in heat_systems:
 
@@ -2193,59 +2204,118 @@ def add_industry(n, costs):
         p_set=industrial_demand.loc[nodes, "hydrogen"] / 8760
     )
 
-    if options["shipping_hydrogen_liquefaction"]:
+    shipping_hydrogen_share = get(options['shipping_hydrogen_share'], investment_year)
+    shipping_methanol_share = get(options['shipping_methanol_share'], investment_year)
+    shipping_oil_share = get(options['shipping_oil_share'], investment_year)
+
+    total_share = shipping_hydrogen_share + shipping_methanol_share + shipping_oil_share
+    if total_share != 1:
+        logger.warning(f"Total shipping shares sum up to {total_share*100}%, corresponding to increased or decreased demand assumptions.")
+
+    domestic_navigation = pop_weighted_energy_totals.loc[nodes, "total domestic navigation"].squeeze()
+    international_navigation = pd.read_csv(snakemake.input.shipping_demand, index_col=0).squeeze()
+    all_navigation = domestic_navigation + international_navigation
+    p_set = all_navigation * 1e6 / 8760
+
+    if shipping_hydrogen_share:
+
+        efficiency = options['shipping_average_efficiency'] / costs.at["fuel cell", "efficiency"]
+        shipping_hydrogen_share = get(options['shipping_hydrogen_share'], investment_year)
+
+        if options["shipping_hydrogen_liquefaction"]:
+
+            n.madd("Bus",
+                nodes,
+                suffix=" H2 liquid",
+                carrier="H2 liquid",
+                location=nodes,
+                unit="MWh_LHV"
+            )
+
+            n.madd("Link",
+                nodes + " H2 liquefaction",
+                bus0=nodes + " H2",
+                bus1=nodes + " H2 liquid",
+                carrier="H2 liquefaction",
+                efficiency=costs.at["H2 liquefaction", 'efficiency'],
+                capital_cost=costs.at["H2 liquefaction", 'fixed'],
+                p_nom_extendable=True,
+                lifetime=costs.at['H2 liquefaction', 'lifetime']
+            )
+
+            shipping_bus = nodes + " H2 liquid"
+        else:
+            shipping_bus = nodes + " H2"
+
+        efficiency = options['shipping_oil_efficiency'] / costs.at["fuel cell", "efficiency"]
+        p_set_hydrogen = shipping_hydrogen_share * p_set * efficiency
+
+        n.madd("Load",
+            nodes,
+            suffix=" H2 for shipping",
+            bus=shipping_bus,
+            carrier="H2 for shipping",
+            p_set=p_set_hydrogen
+        )
+
+    if shipping_methanol_share:
 
         n.madd("Bus",
-            nodes,
-            suffix=" H2 liquid",
-            carrier="H2 liquid",
-            location=nodes,
+            spatial.methanol.nodes,
+            carrier="methanol",
+            location=spatial.methanol.locations,
             unit="MWh_LHV"
         )
 
         n.madd("Link",
-            nodes + " H2 liquefaction",
-            bus0=nodes + " H2",
-            bus1=nodes + " H2 liquid",
-            carrier="H2 liquefaction",
-            efficiency=costs.at["H2 liquefaction", 'efficiency'],
-            capital_cost=costs.at["H2 liquefaction", 'fixed'],
+            spatial.h2.locations + " methanolisation",
+            bus0=spatial.h2.nodes,
+            bus1=spatial.methanol.nodes,
+            bus2=nodes,
+            bus3=spatial.co2.nodes,
+            carrier="methanolisation",
             p_nom_extendable=True,
-            lifetime=costs.at['H2 liquefaction', 'lifetime']
+            capital_cost=costs.at["methanolisation", 'fixed'] * options["MWh_MeOH_per_MWh_H2"], # EUR/MW_H2/a
+            lifetime=costs.at["methanolisation", 'lifetime'],
+            efficiency=options["MWh_MeOH_per_MWh_H2"],
+            efficiency2=- options["MWh_MeOH_per_MWh_H2"] / options["MWh_MeOH_per_MWh_e"],
+            efficiency3=- options["MWh_MeOH_per_MWh_H2"] / options["MWh_MeOH_per_tCO2"],
         )
 
-        shipping_bus = nodes + " H2 liquid"
-    else:
-        shipping_bus = nodes + " H2"
-
-    all_navigation = ["total international navigation", "total domestic navigation"]
-    efficiency = options['shipping_average_efficiency'] / costs.at["fuel cell", "efficiency"]
-    shipping_hydrogen_share = get(options['shipping_hydrogen_share'], investment_year)
-    p_set = shipping_hydrogen_share * pop_weighted_energy_totals.loc[nodes, all_navigation].sum(axis=1) * 1e6 * efficiency / 8760
-
-    n.madd("Load",
-        nodes,
-        suffix=" H2 for shipping",
-        bus=shipping_bus,
-        carrier="H2 for shipping",
-        p_set=p_set
-    )
-
-    if shipping_hydrogen_share < 1:
-
-        shipping_oil_share = 1 - shipping_hydrogen_share
-
-        p_set = shipping_oil_share * pop_weighted_energy_totals.loc[nodes, all_navigation].sum(axis=1) * 1e6 / 8760.
+        efficiency = options["shipping_oil_efficiency"] / options["shipping_methanol_efficiency"]
+        p_set_methanol = shipping_methanol_share * p_set.sum() * efficiency
 
         n.madd("Load",
-            nodes,
+            spatial.methanol.nodes,
+            suffix=" shipping methanol",
+            bus=spatial.methanol.nodes,
+            carrier="shipping methanol",
+            p_set=p_set_methanol,
+        )
+
+        # CO2 intensity methanol based on stoichiometric calculation with 22.7 GJ/t methanol (32 g/mol), CO2 (44 g/mol), 277.78 MWh/TJ = 0.218 t/MWh
+        co2 = p_set_methanol / options["MWh_MeOH_per_tCO2"]
+
+        n.add("Load",
+            "shipping methanol emissions",
+            bus="co2 atmosphere",
+            carrier="shipping methanol emissions",
+            p_set=-co2,
+        )
+
+    if shipping_oil_share:
+
+        p_set_oil = shipping_oil_share * p_set.sum()
+
+        n.madd("Load",
+            spatial.oil.nodes,
             suffix=" shipping oil",
             bus=spatial.oil.nodes,
             carrier="shipping oil",
-            p_set=p_set
+            p_set=p_set_oil
         )
 
-        co2 = shipping_oil_share * pop_weighted_energy_totals.loc[nodes, all_navigation].sum().sum() * 1e6 / 8760 * costs.at["oil", "CO2 intensity"]
+        co2 = p_set_oil * costs.at["oil", "CO2 intensity"]
 
         n.add("Load",
             "shipping oil emissions",
@@ -2309,7 +2379,7 @@ def add_industry(n, costs):
         bus2=spatial.co2.nodes,
         carrier="Fischer-Tropsch",
         efficiency=costs.at["Fischer-Tropsch", 'efficiency'],
-        capital_cost=costs.at["Fischer-Tropsch", 'fixed'],
+        capital_cost=costs.at["Fischer-Tropsch", 'fixed'] * costs.at["Fischer-Tropsch", 'efficiency'], # EUR/MW_H2/a
         efficiency2=-costs.at["oil", 'CO2 intensity'] * costs.at["Fischer-Tropsch", 'efficiency'],
         p_nom_extendable=True,
         lifetime=costs.at['Fischer-Tropsch', 'lifetime']
