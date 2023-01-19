@@ -29,8 +29,10 @@ spatial = SimpleNamespace()
 
 def calculate_offwind_cost(WD, MW=12, D=236, HH=138, SP=343, DT=8):
     """
-    Calculating offshore wind capex considering the average water depth of the region.
-    Equations and default values from DEA technology data (https://ens.dk/sites/ens.dk/files/Statistik/technology_catalogue_offshore_wind_march_2022_-_annex_to_prediction_of_performance_and_cost.pdf).
+    Calculating offshore wind capex considering the average water depth of the
+    region. Equations and default values from DEA technology data (https://ens.
+    dk/sites/ens.dk/files/Statistik/technology_catalogue_offshore_wind_march_20
+    22_-_annex_to_prediction_of_performance_and_cost.pdf).
 
     Parameters
     ----------
@@ -52,19 +54,39 @@ def calculate_offwind_cost(WD, MW=12, D=236, HH=138, SP=343, DT=8):
     capex: xarray
         Capex of the wind turbine in the different regions
     """
-    RA=(D/2)**2*np.pi
-    IA=DT*D
-    wind_turbine_invest=(-0.6*SP+750+(0.53*HH*RA+5500)/(1000*MW))*1.1
-    wind_turbine_install= 300*MW**(-0.6)
-    foundation_invest=(8*np.abs(WD)+30)*(1+(0.003*(350-np.min([400,SP]))))
-    foundation_install=2.5*np.abs(WD)+600*MW**(-0.6)
-    array_cable=IA*500/MW/1000 
-    turbine_transport=50
-    insurance=100
-    finance_cost=100
-    continences=50
-    development_cost=0.02 # in % of capex
-    capex=np.sum([wind_turbine_invest,wind_turbine_install, foundation_invest, foundation_install, array_cable, turbine_transport, insurance, finance_cost, continences])*(1+development_cost)*1000 # in €/MW
+    RA = (D / 2) ** 2 * np.pi
+    IA = DT * D
+    wind_turbine_invest = (
+        -0.6 * SP + 750 + (0.53 * HH * RA + 5500) / (1000 * MW)
+    ) * 1.1
+    wind_turbine_install = 300 * MW ** (-0.6)
+    foundation_invest = (8 * np.abs(WD) + 30) * (
+        1 + (0.003 * (350 - np.min([400, SP])))
+    )
+    foundation_install = 2.5 * np.abs(WD) + 600 * MW ** (-0.6)
+    array_cable = IA * 500 / MW / 1000
+    turbine_transport = 50
+    insurance = 100
+    finance_cost = 100
+    continences = 50
+    development_cost = 0.02  # in % of capex
+    capex = (
+        sum(
+            [
+                wind_turbine_invest,
+                wind_turbine_install,
+                foundation_invest,
+                foundation_install,
+                array_cable,
+                turbine_transport,
+                insurance,
+                finance_cost,
+                continences,
+            ]
+        )
+        * (1 + development_cost)
+        * 1000
+    )  # in €/MW
     return capex
 
 def define_spatial(nodes, options):
@@ -453,7 +475,8 @@ def update_wind_solar_costs(n, costs):
             idx = n.generators.loc[n.generators.carrier==tech, 'capital_cost'].index
             idx = dict(zip(capital_cost.index,capital_cost.index.map(lambda x: idx[idx.str.contains(x)][0])))
             n.generators.loc[n.generators.carrier==tech, 'capital_cost'] = capital_cost.rename(index=idx)
-            n.generators.loc[n.generators.carrier==tech, 'grid_connection_cost'] = grid_connection_cost.rename(index=idx)
+            n.generators.loc[n.generators.carrier==tech, 'cable_cost'] = cable_cost.rename(index=idx)
+            n.generators.loc[n.generators.carrier==tech, 'substation_cost'] = costs.at[tech + '-station', 'fixed']
             n.generators.loc[n.generators.carrier==tech, 'turbine_cost'] = turbine_cost if isinstance(turbine_cost, float) else turbine_cost.rename(index=idx)
 
 
