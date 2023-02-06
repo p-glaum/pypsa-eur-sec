@@ -19,16 +19,15 @@ wildcard_constraints:
     opts="[-+a-zA-Z0-9]*",
     sector_opts="[-+a-zA-Z0-9\.\s]*"
 
-
-SDIR = config['summary_dir'] + '/' + config['run']
-RDIR = config['results_dir'] + config['run']
+SDIR = config['summary_dir'] + '/' + config['run']['name']
+RDIR = config['run']['name']
 CDIR = config['costs_dir']
 
 
 subworkflow pypsaeur:
     workdir: "../pypsa-eur"
     snakefile: "../pypsa-eur/Snakefile"
-    configfile: "../configs/config.power.yaml"
+    configfile: "../pypsa-eur/config.yaml"
 
 rule all:
     input: SDIR + '/graphs/costs.pdf'
@@ -36,19 +35,19 @@ rule all:
 
 rule solve_all_networks:
     input:
-        expand(RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc",
+        expand("results/" + RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
                **config['scenario'])
 
 
 rule prepare_sector_networks:
     input:
-        expand(RDIR + "/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc",
+        expand("results/" + RDIR + "/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
                **config['scenario'])
 
 
 rule plot_all_networks:
     input:
-        expand(RDIR + "/maps/elec_s{simpl}_{clusters}_lv{lv}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
+        expand("results/" + RDIR + "/maps/elec_s{simpl}_{clusters}_lv{ll}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
                **config['scenario'])
 
 
@@ -75,7 +74,7 @@ if config.get('retrieve_sector_databundle', True):
 
 rule build_population_layouts:
     input:
-        nuts3_shapes=pypsaeur('resources/nuts3_shapes.geojson'),
+        nuts3_shapes=pypsaeur('resources/'+ RDIR +'/nuts3_shapes.geojson'),
         urban_percent="data/urban_percent.csv"
     output:
         pop_layout_total="resources/pop_layout_total.nc",
@@ -92,7 +91,7 @@ rule build_clustered_population_layouts:
         pop_layout_total="resources/pop_layout_total.nc",
         pop_layout_urban="resources/pop_layout_urban.nc",
         pop_layout_rural="resources/pop_layout_rural.nc",
-        regions_onshore=pypsaeur('resources/regions_onshore_elec_s{simpl}_{clusters}.geojson')
+        regions_onshore=pypsaeur('resources/' + RDIR + '/regions_onshore_elec_s{simpl}_{clusters}.geojson')
     output:
         clustered_pop_layout="resources/pop_layout_elec_s{simpl}_{clusters}.csv"
     resources: mem_mb=10000
@@ -105,7 +104,7 @@ rule build_simplified_population_layouts:
         pop_layout_total="resources/pop_layout_total.nc",
         pop_layout_urban="resources/pop_layout_urban.nc",
         pop_layout_rural="resources/pop_layout_rural.nc",
-        regions_onshore=pypsaeur('resources/regions_onshore_elec_s{simpl}.geojson')
+        regions_onshore=pypsaeur('resources/' + RDIR + '/regions_onshore_elec_s{simpl}.geojson')
     output:
         clustered_pop_layout="resources/pop_layout_elec_s{simpl}.csv"
     resources: mem_mb=10000
@@ -143,8 +142,8 @@ if config["sector"]["gas_network"] or config["sector"]["H2_retrofit"]:
             entry="data/gas_network/scigrid-gas/data/IGGIELGN_BorderPoints.geojson",
             production="data/gas_network/scigrid-gas/data/IGGIELGN_Productions.geojson",
             planned_lng="data/gas_network/planned_LNGs.csv",
-            regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
-            regions_offshore=pypsaeur('resources/regions_offshore_elec_s{simpl}_{clusters}.geojson')
+            regions_onshore=pypsaeur("resources/" + RDIR + "/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
+            regions_offshore=pypsaeur('resources/' + RDIR + '/regions_offshore_elec_s{simpl}_{clusters}.geojson')
         output:
             gas_input_nodes="resources/gas_input_locations_s{simpl}_{clusters}.geojson",
             gas_input_nodes_simplified="resources/gas_input_locations_s{simpl}_{clusters}_simplified.csv"
@@ -155,8 +154,8 @@ if config["sector"]["gas_network"] or config["sector"]["H2_retrofit"]:
     rule cluster_gas_network:
         input:
             cleaned_gas_network="resources/gas_network.csv",
-            regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
-            regions_offshore=pypsaeur("resources/regions_offshore_elec_s{simpl}_{clusters}.geojson")
+            regions_onshore=pypsaeur("resources/" + RDIR + "/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
+            regions_offshore=pypsaeur("resources/" + RDIR + "/regions_offshore_elec_s{simpl}_{clusters}.geojson")
         output:
             clustered_gas_network="resources/gas_network_elec_s{simpl}_{clusters}.csv"
         resources: mem_mb=4000
@@ -171,7 +170,7 @@ else:
 rule build_heat_demands:
     input:
         pop_layout="resources/pop_layout_{scope}.nc",
-        regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson")
+        regions_onshore=pypsaeur("resources/" + RDIR + "/regions_onshore_elec_s{simpl}_{clusters}.geojson")
     output:
         heat_demand="resources/heat_demand_{scope}_elec_s{simpl}_{clusters}.nc"
     resources: mem_mb=20000
@@ -183,7 +182,7 @@ rule build_heat_demands:
 rule build_temperature_profiles:
     input:
         pop_layout="resources/pop_layout_{scope}.nc",
-        regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson")
+        regions_onshore=pypsaeur("resources/" + RDIR + "/regions_onshore_elec_s{simpl}_{clusters}.geojson")
     output:
         temp_soil="resources/temp_soil_{scope}_elec_s{simpl}_{clusters}.nc",
         temp_air="resources/temp_air_{scope}_elec_s{simpl}_{clusters}.nc",
@@ -216,7 +215,7 @@ rule build_cop_profiles:
 rule build_solar_thermal_profiles:
     input:
         pop_layout="resources/pop_layout_{scope}.nc",
-        regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson")
+        regions_onshore=pypsaeur("resources/" + RDIR + "/regions_onshore_elec_s{simpl}_{clusters}.geojson")
     output:
         solar_thermal="resources/solar_thermal_{scope}_elec_s{simpl}_{clusters}.nc",
     resources: mem_mb=20000
@@ -232,7 +231,7 @@ def input_eurostat(w):
 
 rule build_energy_totals:
     input:
-        nuts3_shapes=pypsaeur('resources/nuts3_shapes.geojson'),
+        nuts3_shapes=pypsaeur('resources/' + RDIR + '/nuts3_shapes.geojson'),
         co2="data/eea/UNFCCC_v23.csv",
         swiss="data/switzerland-sfoe/switzerland-new_format.csv",
         idees="data/jrc-idees-2015",
@@ -252,11 +251,11 @@ rule build_biomass_potentials:
     input:
         enspreso_biomass=HTTP.remote("https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/ENSPRESO/ENSPRESO_BIOMASS.xlsx", keep_local=True),
         nuts2="data/nuts/NUTS_RG_10M_2013_4326_LEVL_2.geojson", # https://gisco-services.ec.europa.eu/distribution/v2/nuts/download/#nuts21
-        regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
+        regions_onshore=pypsaeur('resources/' + RDIR + '/regions_onshore_elec_s{simpl}_{clusters}.geojson'),
         nuts3_population="../pypsa-eur/data/bundle/nama_10r_3popgdp.tsv.gz",
         swiss_cantons="../pypsa-eur/data/bundle/ch_cantons.csv",
         swiss_population="../pypsa-eur/data/bundle/je-e-21.03.02.xls",
-        country_shapes=pypsaeur('resources/country_shapes.geojson')
+        country_shapes=pypsaeur('resources/' + RDIR + '/country_shapes.geojson')
     output:
         biomass_potentials_all='resources/biomass_potentials_all_s{simpl}_{clusters}.csv',
         biomass_potentials='resources/biomass_potentials_s{simpl}_{clusters}.csv'
@@ -284,8 +283,8 @@ else:
 rule build_salt_cavern_potentials:
     input:
         salt_caverns="data/h2_salt_caverns_GWh_per_sqkm.geojson",
-        regions_onshore=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
-        regions_offshore=pypsaeur("resources/regions_offshore_elec_s{simpl}_{clusters}.geojson"),
+        regions_onshore=pypsaeur("resources/" + RDIR + "/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
+        regions_offshore=pypsaeur("resources/" + RDIR + "/regions_offshore_elec_s{simpl}_{clusters}.geojson"),
     output:
         h2_cavern_potential="resources/salt_cavern_potentials_s{simpl}_{clusters}.csv"
     threads: 1
@@ -343,7 +342,7 @@ rule build_industrial_production_per_country_tomorrow:
 
 rule build_industrial_distribution_key:
     input:
-        regions_onshore=pypsaeur('resources/regions_onshore_elec_s{simpl}_{clusters}.geojson'),
+        regions_onshore=pypsaeur('resources/' + RDIR + '/regions_onshore_elec_s{simpl}_{clusters}.geojson'),
         clustered_pop_layout="resources/pop_layout_elec_s{simpl}_{clusters}.csv",
         hotmaps_industrial_database="data/Industrial_Database.csv",
     output:
@@ -441,8 +440,8 @@ rule build_population_weighted_energy_totals:
 rule build_shipping_demand:
     input:
         ports="data/attributed_ports.json",
-        scope=pypsaeur("resources/europe_shape.geojson"),
-        regions=pypsaeur("resources/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
+        scope=pypsaeur("resources/" + RDIR + "/europe_shape.geojson"),
+        regions=pypsaeur("resources/" + RDIR + "/regions_onshore_elec_s{simpl}_{clusters}.geojson"),
         demand="resources/energy_totals.csv"
     output: "resources/shipping_demand_s{simpl}_{clusters}.csv"
     threads: 1
@@ -471,7 +470,7 @@ rule build_transport_demand:
 rule prepare_sector_network:
     input:
         overrides="data/override_component_attrs",
-        network=pypsaeur('networks/elec_s{simpl}_{clusters}_off-{offgrid}_ec_lv{lv}_{opts}.nc'),
+        network=pypsaeur('networks/' + RDIR + '/elec_s{simpl}_{clusters}_off-{offgrid}_ec_lv{ll}_{opts}.nc'),
         energy_totals_name='resources/energy_totals.csv',
         eurostat=input_eurostat,
         pop_weighted_energy_totals="resources/pop_weighted_energy_totals_s{simpl}_{clusters}.csv",
@@ -485,12 +484,12 @@ rule prepare_sector_network:
         biomass_potentials='resources/biomass_potentials_s{simpl}_{clusters}.csv',
         heat_profile="data/heat_load_profile_BDEW.csv",
         costs=CDIR + "costs_{}.csv".format(config['costs']['year']) if config["foresight"] == "overnight" else CDIR + "costs_{planning_horizons}.csv",
-        profile_offwind_ac=pypsaeur("resources/profile_offwind-ac.nc"),
-        profile_offwind_dc=pypsaeur("resources/profile_offwind-dc.nc"),
-        profile_offwind_float=pypsaeur("resources/profile_offwind-float.nc"),
+        profile_offwind_ac=pypsaeur("resources/" + RDIR + "/profile_offwind-ac.nc"),
+        profile_offwind_dc=pypsaeur("resources/" + RDIR + "/profile_offwind-dc.nc"),
+        profile_offwind_float=pypsaeur("resources/" + RDIR + "/profile_offwind-float.nc"),
         h2_cavern="resources/salt_cavern_potentials_s{simpl}_{clusters}.csv",
-        busmap_s=pypsaeur("resources/busmap_elec_s{simpl}.csv"),
-        busmap=pypsaeur("resources/busmap_elec_s{simpl}_{clusters}.csv"),
+        busmap_s=pypsaeur("resources/" + RDIR + "/busmap_elec_s{simpl}.csv"),
+        busmap=pypsaeur("resources/" + RDIR + "/busmap_elec_s{simpl}_{clusters}.csv"),
         clustered_pop_layout="resources/pop_layout_elec_s{simpl}_{clusters}.csv",
         simplified_pop_layout="resources/pop_layout_elec_s{simpl}.csv",
         industrial_demand="resources/industrial_energy_demand_elec_s{simpl}_{clusters}_{planning_horizons}.csv",
@@ -515,24 +514,24 @@ rule prepare_sector_network:
         **build_retro_cost_output,
         **build_biomass_transport_costs_output,
         **gas_infrastructure
-    output: RDIR + '/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc'
+    output: "results/" + RDIR + '/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc'
     threads: 1
     resources: mem_mb=2000
-    benchmark: RDIR + "/benchmarks/prepare_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}"
+    benchmark: "results/" +  RDIR + "/benchmarks/prepare_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}"
     script: "scripts/prepare_sector_network.py"
 
 
 rule plot_network:
     input:
         overrides="data/override_component_attrs",
-        network=RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc",
-        regions=pypsaeur('resources/regions_onshore_elec_s{simpl}_{clusters}.geojson')
+        network="results/" + RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
+        regions=pypsaeur('resources/' + RDIR + '/regions_onshore_elec_s{simpl}_{clusters}.geojson')
     output:
-        map=RDIR + "/maps/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
-        today=RDIR + "/maps/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}-today.pdf"
+        map="results/" + RDIR + "/maps/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
+        today="results/" + RDIR + "/maps/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}-today.pdf"
     threads: 2
     resources: mem_mb=10000
-    benchmark: RDIR + "/benchmarks/plot_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}"
+    benchmark: "results/" + RDIR + "/benchmarks/plot_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}"
     script: "scripts/plot_network.py"
 
 
@@ -556,12 +555,12 @@ rule make_summary:
     input:
         overrides="data/override_component_attrs",
         networks=expand(
-            RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc",
+            "results/" + RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
             **config['scenario']
         ),
         costs=CDIR + "costs_{}.csv".format(config['costs']['year']) if config["foresight"] == "overnight" else CDIR + "costs_{}.csv".format(config['scenario']['planning_horizons'][0]),
         plots=expand(
-            RDIR + "/maps/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
+            "results/" + RDIR + "/maps/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
             **config['scenario']
         )
     output:
@@ -608,21 +607,21 @@ if config["foresight"] == "overnight":
     rule solve_network:
         input:
             overrides="data/override_component_attrs",
-            network=RDIR + "/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc",
+            network="results/" + RDIR + "/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
             costs=CDIR + "costs_{}.csv".format(config['costs']['year']),
             config=SDIR + '/configs/config.yaml',
             #env=SDIR + '/configs/environment.yaml',
-        output: RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc"
+        output: "results/" + RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc"
         shadow: "shallow"
         log:
-            solver=RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_solver.log",
-            python=RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_python.log",
-            memory=RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_memory.log"
+            solver="results/" + RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}_solver.log",
+            python="results/" + RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}_python.log",
+            memory="results/" + RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}_memory.log"
         threads: config['solving']['solver'].get('threads', 4)
         resources: 
             mem_mb=config['solving']['mem'],
             walltime="20:00:00"
-        benchmark: RDIR + "/benchmarks/solve_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}"
+        benchmark: "results/" + RDIR + "/benchmarks/solve_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}"
         script: "scripts/solve_network.py"
 
 
@@ -631,10 +630,10 @@ if config["foresight"] == "myopic":
     rule add_existing_baseyear:
         input:
             overrides="data/override_component_attrs",
-            network=RDIR + '/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc',
-            powerplants=pypsaeur('resources/powerplants.csv'),
-            busmap_s=pypsaeur("resources/busmap_elec_s{simpl}.csv"),
-            busmap=pypsaeur("resources/busmap_elec_s{simpl}_{clusters}.csv"),
+            network="results/" + RDIR + '/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc',
+            powerplants=pypsaeur('resources/' + RDIR + '/powerplants.csv'),
+            busmap_s=pypsaeur("resources/" + RDIR + "/busmap_elec_s{simpl}.csv"),
+            busmap=pypsaeur("resources/" + RDIR + "/busmap_elec_s{simpl}_{clusters}.csv"),
             clustered_pop_layout="resources/pop_layout_elec_s{simpl}_{clusters}.csv",
             costs=CDIR + "costs_{}.csv".format(config['scenario']['planning_horizons'][0]),
             cop_soil_total="resources/cop_soil_total_elec_s{simpl}_{clusters}.nc",
@@ -644,12 +643,12 @@ if config["foresight"] == "myopic":
             existing_solar='data/existing_infrastructure/solar_capacity_IRENA.csv',
             existing_onwind='data/existing_infrastructure/onwind_capacity_IRENA.csv',
             existing_offwind='data/existing_infrastructure/offwind_capacity_IRENA.csv',
-        output: RDIR + '/prenetworks-brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc'
+        output: "results/" + RDIR + '/prenetworks-brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc'
         wildcard_constraints:
             planning_horizons=config['scenario']['planning_horizons'][0] #only applies to baseyear
         threads: 1
         resources: mem_mb=2000
-        benchmark: RDIR + '/benchmarks/add_existing_baseyear/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}'
+        benchmark: "results/" + RDIR + '/benchmarks/add_existing_baseyear/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}'
         script: "scripts/add_existing_baseyear.py"
 
 
@@ -657,21 +656,21 @@ if config["foresight"] == "myopic":
         planning_horizons = config["scenario"]["planning_horizons"]
         i = planning_horizons.index(int(wildcards.planning_horizons))
         planning_horizon_p = str(planning_horizons[i-1])
-        return RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_" + planning_horizon_p + ".nc"
+        return "results/" + RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_" + planning_horizon_p + ".nc"
 
 
     rule add_brownfield:
         input:
             overrides="data/override_component_attrs",
-            network=RDIR + '/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc',
+            network="results/" + RDIR + '/prenetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc',
             network_p=solved_previous_horizon, #solved network at previous time step
             costs=CDIR + "costs_{planning_horizons}.csv",
             cop_soil_total="resources/cop_soil_total_elec_s{simpl}_{clusters}.nc",
             cop_air_total="resources/cop_air_total_elec_s{simpl}_{clusters}.nc"
-        output: RDIR + "/prenetworks-brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc"
+        output: "results/" + RDIR + "/prenetworks-brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc"
         threads: 4
         resources: mem_mb=10000
-        benchmark: RDIR + '/benchmarks/add_brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}'
+        benchmark: "results/" + RDIR + '/benchmarks/add_brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}'
         script: "scripts/add_brownfield.py"
 
 
@@ -681,16 +680,16 @@ if config["foresight"] == "myopic":
     rule solve_network_myopic:
         input:
             overrides="data/override_component_attrs",
-            network=RDIR + "/prenetworks-brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc",
+            network="results/" + RDIR + "/prenetworks-brownfield/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
             costs=CDIR + "costs_{planning_horizons}.csv",
             config=SDIR + '/configs/config.yaml'
-        output: RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}.nc"
+        output: "results/" + RDIR + "/postnetworks/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}.nc"
         shadow: "shallow"
         log:
-            solver=RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_solver.log",
-            python=RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_python.log",
-            memory=RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}_memory.log"
+            solver="results/" + RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}_solver.log",
+            python="results/" + RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}_python.log",
+            memory="results/" + RDIR + "/logs/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}_memory.log"
         threads: 4
         resources: mem_mb=config['solving']['mem']
-        benchmark: RDIR + "/benchmarks/solve_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{lv}_{opts}_{sector_opts}_{planning_horizons}"
+        benchmark: "results/" + RDIR + "/benchmarks/solve_network/elec_s{simpl}_{clusters}_off-{offgrid}_lv{ll}_{opts}_{sector_opts}_{planning_horizons}"
         script: "scripts/solve_network.py"
